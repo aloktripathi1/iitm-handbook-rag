@@ -1,0 +1,9 @@
+anthropic
+sentence-transformers
+fastapi
+uvicorn[standard]
+requests
+beautifulsoup4
+numpy
+python-dotenv
+python-multipart
