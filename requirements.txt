@@ -1,5 +1,6 @@
 openai
-sentence-transformers
+torch==2.2.2+cpu --extra-index-url https://download.pytorch.org/whl/cpu
+sentence-transformers==3.0.1
 fastapi
 uvicorn[standard]
 requests
