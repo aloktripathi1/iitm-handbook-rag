@@ -47,6 +47,7 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     answer: str
     sources: list[str]
+    documents: list[str]
     chunks_retrieved: int
     chunks_after_rerank: int
 
@@ -74,10 +75,12 @@ async def chat(request: ChatRequest) -> ChatResponse:
         raise HTTPException(status_code=500, detail=str(e))
 
     sources = list(dict.fromkeys(c["heading"] for c in reranked))
+    documents = list(dict.fromkeys(c.get("source", "unknown") for c in reranked))
 
     return ChatResponse(
         answer=answer,
         sources=sources,
+        documents=documents,
         chunks_retrieved=len(candidates),
         chunks_after_rerank=len(reranked),
     )
