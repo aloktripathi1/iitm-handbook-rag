@@ -1,5 +1,6 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
 openai
-torch==2.2.2+cpu --extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.6.0+cpu
 sentence-transformers==3.0.1
 fastapi
 uvicorn[standard]
