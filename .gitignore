@@ -1,8 +1,8 @@
 # Secrets — never commit (set OPENROUTER_API_KEY inside)
 .env
 
-# Generated at runtime — regenerate with scripts/ingest.py
-data/vector_store.json
+# vector_store.json is committed to the repo for deployment
+# Regenerate locally with: python scripts/ingest.py
 
 # Python
 __pycache__/
