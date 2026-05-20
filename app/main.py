@@ -7,11 +7,13 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from retriever import generate, load_store, rerank, retrieve
+from app.retriever import generate, load_store, rerank, retrieve
 
 store: list[dict] = []
 
-STATIC_DIR = Path(__file__).parent / "static"
+ROOT_DIR = Path(__file__).parent.parent
+STATIC_DIR = ROOT_DIR / "static"
+DATA_DIR = ROOT_DIR / "data"
 
 
 @asynccontextmanager
@@ -19,10 +21,10 @@ async def lifespan(app: FastAPI):
     global store
     print("Loading vector store ...")
     try:
-        store = load_store("vector_store.json")
+        store = load_store(str(DATA_DIR / "vector_store.json"))
         print(f"  Loaded {len(store)} chunks")
     except FileNotFoundError:
-        print("  WARNING: vector_store.json not found — run ingest.py first")
+        print("  WARNING: vector_store.json not found — run scripts/ingest.py first")
     yield
 
 
@@ -59,13 +61,13 @@ async def chat(request: ChatRequest) -> ChatResponse:
     if not store:
         raise HTTPException(
             status_code=503,
-            detail="Vector store is not loaded. Run ingest.py first.",
+            detail="Vector store is not loaded. Run scripts/ingest.py first.",
         )
     if not request.question.strip():
         raise HTTPException(status_code=400, detail="Question cannot be empty.")
 
     try:
-        candidates = retrieve(request.question, store, top_k=5)
+        candidates = retrieve(request.question, store, top_k=10)
         reranked = rerank(request.question, candidates, top_n=3)
         answer = generate(request.question, reranked)
     except RuntimeError as e:

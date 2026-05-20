@@ -1,12 +1,14 @@
 import sys
 import io
+from pathlib import Path
 
 # Force UTF-8 output so rupee symbol and other Unicode print correctly
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
-from retriever import load_store, retrieve, rerank, generate
+from app.retriever import load_store, retrieve, rerank, generate
 
-store = load_store()
+ROOT = Path(__file__).parent.parent
+store = load_store(str(ROOT / "data" / "vector_store.json"))
 
 questions = [
     "What is the fee for the foundation level?",

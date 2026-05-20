@@ -3,17 +3,31 @@ import os
 import re
 
 import numpy as np
-import anthropic
+from openai import OpenAI
 from sentence_transformers import SentenceTransformer
 from dotenv import load_dotenv
 
 load_dotenv()
 
 EMBED_MODEL = "all-MiniLM-L6-v2"
+# Any model available on openrouter.ai — free tier options work fine
+LLM_MODEL = os.getenv("OPENROUTER_MODEL", "meta-llama/llama-3.1-8b-instruct")
 
-claude_client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-
+_client: OpenAI | None = None
 _embed_model: SentenceTransformer | None = None
+
+
+def _get_client() -> OpenAI:
+    global _client
+    if _client is None:
+        api_key = os.getenv("OPENROUTER_API_KEY")
+        if not api_key:
+            raise RuntimeError("OPENROUTER_API_KEY is not set in .env")
+        _client = OpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=api_key,
+        )
+    return _client
 
 
 def _get_embed_model() -> SentenceTransformer:
@@ -23,7 +37,7 @@ def _get_embed_model() -> SentenceTransformer:
     return _embed_model
 
 
-def load_store(path: str = "vector_store.json") -> list[dict]:
+def load_store(path: str = "data/vector_store.json") -> list[dict]:
     with open(path, "r", encoding="utf-8") as f:
         records = json.load(f)
     for record in records:
@@ -54,6 +68,7 @@ def retrieve(query: str, store: list[dict], top_k: int = 5) -> list[dict]:
             "id": record["id"],
             "heading": record["heading"],
             "text": record["text"],
+            "source": record.get("source", "unknown"),
             "score": cosine_similarity(query_embedding, record["embedding"]),
         }
         for record in store
@@ -65,7 +80,7 @@ def retrieve(query: str, store: list[dict], top_k: int = 5) -> list[dict]:
 
 def rerank(query: str, candidates: list[dict], top_n: int = 3) -> list[dict]:
     passages = "\n".join(
-        f"{i + 1}. {c['text'][:400]}" for i, c in enumerate(candidates)
+        f"{i + 1}. [{c['heading']}] {c['text'][:350]}" for i, c in enumerate(candidates)
     )
     prompt = (
         "Rate each passage's relevance to the question on a scale 0-10.\n"
@@ -75,15 +90,15 @@ def rerank(query: str, candidates: list[dict], top_n: int = 3) -> list[dict]:
     )
 
     try:
-        response = claude_client.messages.create(
-            model="claude-haiku-4-5",
+        response = _get_client().chat.completions.create(
+            model=LLM_MODEL,
             max_tokens=128,
             messages=[{"role": "user", "content": prompt}],
         )
     except Exception as e:
         raise RuntimeError(f"Rerank LLM call failed: {e}") from e
 
-    raw = response.content[0].text.strip()
+    raw = response.choices[0].message.content.strip()
 
     match = re.search(r"\{.*\}", raw, re.DOTALL)
     if not match:
@@ -113,21 +128,23 @@ def generate(query: str, context_chunks: list[dict]) -> str:
 
     system_prompt = (
         "You are a helpful assistant for IITM BS Degree students. "
-        "Answer only from the provided handbook sections. "
+        "Answer only from the provided handbook and grading document sections. "
         "If the answer is not in the context, say so clearly with: "
-        "'I don't know based on the provided handbook sections.' "
+        "'I don't know based on the provided documents.' "
         "Always cite which section your answer comes from by referencing the section heading."
     )
     user_prompt = f"Context:\n{context_text}\n\nQuestion: {query}"
 
     try:
-        response = claude_client.messages.create(
-            model="claude-haiku-4-5",
+        response = _get_client().chat.completions.create(
+            model=LLM_MODEL,
             max_tokens=1024,
-            system=system_prompt,
-            messages=[{"role": "user", "content": user_prompt}],
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
         )
     except Exception as e:
         raise RuntimeError(f"Generation LLM call failed: {e}") from e
 
-    return response.content[0].text.strip()
+    return response.choices[0].message.content.strip()
